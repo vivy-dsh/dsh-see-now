@@ -872,6 +872,461 @@ window.__ModuleLoader__.load({
         h('div', { className: 'sn_note' }, t('hint.origin')));
     }
 
+    function EyeIcon({ size = 20 }) {
+      return h('svg', {
+        width: size, height: size, viewBox: '0 0 24 24', fill: 'none',
+        stroke: 'currentColor', strokeWidth: 1.8, 'aria-hidden': true,
+      },
+        h('path', { d: 'M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z' }),
+        h('circle', { cx: 12, cy: 12, r: 3 }));
+    }
+
+    const SN_TABS = [
+      ['overview', '总览'],
+      ['sessions', '会话'],
+      ['records', '记录'],
+      ['debug', '调试'],
+      ['settings', '配置'],
+      ['privacy', '隐私'],
+    ];
+
+    const SN_ACTION = {
+      start: '开始看',
+      stop: '停止',
+      'window-open': '打开悬浮窗',
+      'window-close': '关闭悬浮窗',
+      clear: '清空记录',
+    };
+
+    const SN_CSS = `
+      .snv{--snv-line:var(--dsw-alias-border-l2,rgba(127,127,127,.24));--snv-line2:var(--dsw-alias-border-l3,rgba(127,127,127,.4));--snv-brand:var(--dsw-alias-brand-primary,#2f6fed);--snv-ok:var(--dsw-alias-state-success-primary,#1a7f4b);--snv-warn:var(--dsw-alias-state-warn-primary,#a86a00);--snv-bad:var(--dsw-alias-state-error-primary,#c43b3b);--snv-fg:var(--dsw-alias-label-primary,#1f2329);--snv-fg2:var(--dsw-alias-label-secondary,rgba(0,0,0,.64));--snv-fg3:var(--dsw-alias-label-tertiary,rgba(0,0,0,.46));--snv-bg:var(--dsw-alias-bg-base,#fff);--snv-bg1:var(--dsw-alias-bg-layer-1,rgba(127,127,127,.04));--snv-bg2:var(--dsw-alias-bg-layer-2,rgba(127,127,127,.08));height:100%;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;background:var(--snv-bg);color:var(--snv-fg);font:13.5px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+      .snv *{box-sizing:border-box}
+      .snv h1,.snv h2,.snv h3,.snv p{margin:0}
+      .snv-head{flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:15px 22px 13px;border-bottom:1px solid var(--snv-line);background:linear-gradient(135deg,rgba(47,111,237,.10),rgba(118,196,255,.07) 58%,transparent)}
+      .snv-kicker{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--snv-fg3)}
+      .snv-head h1{font-size:19px;font-weight:660;letter-spacing:.01em}
+      .snv-sub{margin-top:3px;font-size:12px;color:var(--snv-fg2);max-width:680px}
+      .snv-dots{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px 12px;max-width:100%;padding-top:2px}
+      .snv-dot{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--snv-fg2);white-space:nowrap}
+      .snv-dot::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--snv-fg3);box-shadow:0 0 0 3px rgba(127,127,127,.12);flex:none}
+      .snv-dot.ok::before{background:var(--snv-ok);box-shadow:0 0 0 3px rgba(26,127,75,.16)}
+      .snv-dot.warn::before{background:var(--snv-warn);box-shadow:0 0 0 3px rgba(168,106,0,.16)}
+      .snv-dot.bad::before{background:var(--snv-bad);box-shadow:0 0 0 3px rgba(196,59,59,.16)}
+      .snv-tabs{flex:none;display:flex;gap:2px;padding:0 14px;margin-top:8px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;border-bottom:1px solid var(--snv-line);background:var(--snv-bg1)}
+      .snv-tabs::-webkit-scrollbar{display:none}
+      .snv-tab{flex:none;appearance:none;background:none;border:0;border-bottom:2px solid transparent;border-radius:6px 6px 0 0;margin:0;padding:9px 12px 7px;font:inherit;font-size:12.5px;font-weight:500;color:var(--snv-fg2);cursor:pointer;transition:background .15s,color .15s,border-color .15s}
+      .snv-tab:hover{background:rgba(127,127,127,.08);color:var(--snv-fg)}
+      .snv-tab.on{color:var(--snv-brand);border-bottom-color:var(--snv-brand);font-weight:650}
+      .snv-tab:focus-visible{outline:2px solid var(--snv-brand);outline-offset:-2px}
+      .snv-body{flex:1;min-height:0;overflow:auto;padding:14px 20px 26px;scrollbar-gutter:stable}
+      .snv-alert{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px;padding:8px 11px;border-radius:9px;border:1px solid rgba(196,59,59,.35);background:rgba(196,59,59,.08);color:var(--snv-bad);font-size:12px}
+      .snv-toast{margin-bottom:10px;padding:8px 11px;border-radius:9px;border:1px solid rgba(26,127,75,.35);background:rgba(26,127,75,.08);color:var(--snv-ok);font-size:12px}
+      .snv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+      .snv-card{padding:11px 13px;border:1px solid var(--snv-line);border-radius:11px;background:var(--snv-bg1);min-width:0}
+      .snv-card.ok{border-color:rgba(26,127,75,.35);background:rgba(26,127,75,.06)}
+      .snv-card.warn{border-color:rgba(168,106,0,.35);background:rgba(168,106,0,.06)}
+      .snv-card.bad{border-color:rgba(196,59,59,.35);background:rgba(196,59,59,.06)}
+      .snv-card-title{font-size:11.5px;color:var(--snv-fg3);display:flex;align-items:center;justify-content:space-between;gap:8px}
+      .snv-card-value{margin-top:5px;font-size:18px;font-weight:650;line-height:1.2;letter-spacing:-.01em;font-variant-numeric:tabular-nums;word-break:break-word}
+      .snv-card-hint{margin-top:3px;font-size:11.5px;color:var(--snv-fg2);word-break:break-word}
+      .snv-actions{display:flex;flex-wrap:wrap;gap:8px;margin:13px 0 4px}
+      .snv-btn{appearance:none;height:31px;padding:0 12px;border-radius:8px;border:1px solid var(--snv-line2);background:var(--snv-bg);color:var(--snv-fg);font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
+      .snv-btn:hover{background:var(--snv-bg2)}
+      .snv-btn.primary{background:var(--snv-brand);border-color:var(--snv-brand);color:#fff}
+      .snv-btn.primary:hover{filter:brightness(1.05)}
+      .snv-btn.danger{border-color:rgba(196,59,59,.4);color:var(--snv-bad)}
+      .snv-btn.quiet{border-color:transparent;background:transparent;color:var(--snv-fg2)}
+      .snv-btn:disabled{opacity:.45;cursor:default}
+      .snv-section{margin-top:16px}
+      .snv-section h3{font-size:12.5px;font-weight:650;margin:0 0 7px;color:var(--snv-fg)}
+      .snv-note{margin:0 0 10px;font-size:12px;color:var(--snv-fg2);line-height:1.6}
+      .snv-table{width:100%;border-collapse:collapse;font-size:12px}
+      .snv-table th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--snv-line);color:var(--snv-fg3);font-weight:500;white-space:nowrap}
+      .snv-table td{padding:6px 8px;border-bottom:1px solid var(--snv-line);vertical-align:top;word-break:break-word}
+      .snv-table tr:last-child td{border-bottom:0}
+      .snv-chip{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:999px;border:1px solid var(--snv-line2);font-size:11px;line-height:1.6;color:var(--snv-fg2);background:rgba(127,127,127,.06);white-space:nowrap}
+      .snv-chip.ok{color:var(--snv-ok);border-color:rgba(26,127,75,.35);background:rgba(26,127,75,.1)}
+      .snv-chip.warn{color:var(--snv-warn);border-color:rgba(168,106,0,.35);background:rgba(168,106,0,.1)}
+      .snv-chip.bad{color:var(--snv-bad);border-color:rgba(196,59,59,.35);background:rgba(196,59,59,.1)}
+      .snv-empty{padding:18px 12px;border:1px dashed var(--snv-line2);border-radius:10px;color:var(--snv-fg3);font-size:12px;text-align:center}
+      .snv-embed{border:1px solid var(--snv-line);border-radius:11px;overflow:hidden;background:var(--snv-bg)}
+      .snv-path{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px;color:var(--snv-fg2);word-break:break-all}
+      .snv-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+      .snv-debug-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+      .snv-kv{padding:8px 10px;border:1px solid var(--snv-line);border-radius:8px;background:var(--snv-bg1);min-width:0}
+      .snv-kv-k{font-size:11px;color:var(--snv-fg3)}
+      .snv-kv-v{margin-top:2px;font-size:12.5px;font-weight:600;word-break:break-word}
+      .snv-error{margin:10px 0;padding:9px 11px;border-radius:8px;border:1px solid rgba(196,59,59,.35);background:rgba(196,59,59,.08);color:var(--snv-bad);font-size:12px;line-height:1.55;word-break:break-word}
+      .snv-details{margin-top:4px}
+      .snv-details summary{cursor:pointer;font-size:12px;color:var(--snv-brand)}
+      .snv-pre{margin:8px 0 0;padding:10px;border-radius:8px;background:var(--snv-bg2);font:11.5px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;word-break:break-word;max-height:380px;overflow:auto}
+      @media(max-width:760px){.snv-head{flex-direction:column;gap:8px;padding:13px 14px 11px}.snv-dots{justify-content:flex-start}.snv-tabs{padding:0 8px}.snv-body{padding:11px 12px 20px}.snv-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
+    `;
+
+    async function snRequest(path, options = {}) {
+      const response = await fetch(`${API}${path}`, {
+        headers: { 'content-type': 'application/json', ...(options.headers ?? {}) },
+        ...options,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error((data.rejected ?? []).join('；') || `HTTP ${response.status}`);
+      if (data.ok === false) throw new Error((data.rejected ?? []).join('；') || '操作没有成功');
+      return data;
+    }
+
+    function SnButton({ children, onClick, disabled, kind = '' }) {
+      return h('button', {
+        type: 'button',
+        className: `snv-btn ${kind}`.trim(),
+        disabled: Boolean(disabled),
+        onClick,
+      }, children);
+    }
+
+    function SnChip({ tone = '', children }) {
+      return h('span', { className: `snv-chip ${tone}`.trim() }, children);
+    }
+
+    function snCard(title, value, hint, tone = '') {
+      return h('div', { className: `snv-card ${tone}`.trim() },
+        h('div', { className: 'snv-card-title' }, title),
+        h('div', { className: 'snv-card-value' }, value),
+        h('div', { className: 'snv-card-hint' }, hint));
+    }
+
+    function snTime(value) {
+      try {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value ?? '');
+        return date.toLocaleString('zh-CN', { hour12: false });
+      } catch {
+        return String(value ?? '');
+      }
+    }
+
+    function snSpan(seconds) {
+      const n = Number(seconds);
+      if (!Number.isFinite(n) || n < 0) return '—';
+      if (n < 60) return `${Math.round(n)} 秒`;
+      const m = Math.floor(n / 60), s = Math.round(n % 60);
+      return `${m} 分 ${s} 秒`;
+    }
+
+    /**
+     * 用一句话回答「为什么没有出图」。
+     *
+     * 帧数在涨、出图是 0，是最容易被当成故障的现象，其实多数时候是**镜头没动** ——
+     * 留帧判据一帧都没到，拼图自然不封箱。这几条文案只复用 `runner.status()` 里
+     * 已有的计数，不新增服务端字段。
+     */
+    function snVerdict(cap) {
+      const stats = cap?.stats ?? {};
+      const frames = Number(cap?.frames ?? stats.frames ?? 0);
+      const kept = Number(stats.kept ?? 0);
+      const sheets = Number(cap?.sheets ?? stats.sheets ?? 0);
+      const running = Boolean(cap?.running);
+      if (sheets > 0) return { tone: 'ok', text: `已出 ${sheets} 张图，模型拿到的是拼好的这张。` };
+      if (!running) return { tone: '', text: '没在采集；点「开始看」才会开始攒帧。' };
+      if (frames === 0) return { tone: 'warn', text: '一帧都没抓到：先看下面的「最近错误」，多半是 ffmpeg 没起来。' };
+      if (kept === 0) return { tone: 'warn', text: `抓了 ${frames} 帧，一帧都没留下 —— 画面没变化，不出图是正常的。换个会动的画面再试。` };
+      return { tone: 'warn', text: `留下了 ${kept} 帧，还没封箱成图 —— 等下一帧或超时触发。` };
+    }
+
+    function SnEventTable({ events, empty }) {
+      if (!events?.length) return h('div', { className: 'snv-empty' }, empty);
+      return h('table', { className: 'snv-table' },
+        h('thead', null, h('tr', null,
+          h('th', null, '时间'), h('th', null, '动作'), h('th', null, '结果'), h('th', null, '说明'))),
+        h('tbody', null, events.map((event, index) => h('tr', { key: `${event.at ?? ''}-${index}` },
+          h('td', null, snTime(event.at)),
+          h('td', null, SN_ACTION[event.action] ?? event.action ?? '—'),
+          h('td', null, event.ok === false ? h(SnChip, { tone: 'bad' }, '失败') : h(SnChip, { tone: 'ok' }, '完成')),
+          h('td', null, event.note ?? '—')))));
+    }
+
+    function SnOverview({ status, life, act, busy, refresh }) {
+      const cap = life?.status?.capture ?? {};
+      const win = life?.status?.window ?? {};
+      const lp = life?.status?.loop ?? null;
+      const sheets = cap.sheets ?? cap.stats?.sheets ?? 0;
+      const values = status?.values ?? {};
+      const recent = (life?.journal?.events ?? []).slice(0, 6);
+      return h(Fragment, null,
+        h('div', { className: 'snv-grid' },
+          snCard('采集', cap.running ? '正在看' : '没在看',
+            cap.running
+              ? `${cap.source?.kind ?? '屏幕'} · ${cap.frames ?? 0} 帧 · ${snSpan(cap.since)}`
+              : '开始后按节奏出图，静止画面几乎不花 token',
+            cap.running ? 'ok' : ''),
+          snCard('悬浮窗', win.alive ? (win.hidden ? '在跑，已藏起' : '在跑') : '没开',
+            win.alive
+              ? `pid ${win.pid ?? '—'} · 心跳 ${win.heartbeatAgeSec ?? '—'}s 前`
+              : '桌面上的那个小窗，不是这个网页',
+            win.alive ? (win.hidden ? 'warn' : 'ok') : ''),
+          snCard('陪看会话', lp ? (lp.stopped ? '已停' : '在跑') : '没起',
+            lp
+              ? `叫醒 ${lp.wakes ?? 0} 次 · ${lp.session ?? '未绑定会话'}`
+              : '开始看之后才会绑定到当前聊天',
+            lp && !lp.stopped ? 'ok' : ''),
+          snCard('本次出图', `${sheets} 张`,
+            `${values.fps ?? '—'} fps · ${values.pace ?? '—'} 节奏 · 队列 ${cap.pending ?? 0}`,
+            sheets > 0 ? 'ok' : '')),
+        h('div', { className: 'snv-actions' },
+          h(SnButton, { kind: 'primary', onClick: () => act('start'), disabled: Boolean(busy) }, busy === 'start' ? '启动中…' : '开始看'),
+          h(SnButton, { onClick: () => act('stop'), disabled: Boolean(busy) }, busy === 'stop' ? '停止中…' : '停止'),
+          h(SnButton, { onClick: () => act('window-open'), disabled: Boolean(busy) }, '打开悬浮窗'),
+          h(SnButton, { onClick: () => act('window-close'), disabled: Boolean(busy) }, '关闭悬浮窗'),
+          h(SnButton, { kind: 'quiet', onClick: refresh, disabled: Boolean(busy) }, '刷新')),
+        h('div', { className: 'snv-section' },
+          h('h3', null, '最近动作'),
+          h(SnEventTable, { events: recent, empty: '还没有动作记录。开始看一次，这里会出现时间线。' })));
+    }
+
+    function SnSessions({ life, act, busy }) {
+      const cap = life?.status?.capture ?? {};
+      const lp = life?.status?.loop ?? null;
+      const sessions = (life?.journal?.events ?? []).filter(event => event.action === 'start' || event.action === 'stop');
+      return h(Fragment, null,
+        h('p', { className: 'snv-note' },
+          '一次「看」= 一次陪看会话：开始后采集和常驻循环一起起，按节奏叫醒模型；停止、关窗或收工都会结束它。'),
+        h('div', { className: 'snv-grid' },
+          snCard('当前采集', cap.running ? '在跑' : '停',
+            cap.running ? `${cap.source?.kind ?? '屏幕'} · ${cap.frames ?? 0} 帧 · 队列 ${cap.pending ?? 0}` : '没有采集进程',
+            cap.running ? 'ok' : ''),
+          snCard('当前循环', lp ? (lp.stopped ? '已停' : '在跑') : '没起',
+            lp ? `会话 ${lp.session ?? '未绑定'} · 叫醒 ${lp.wakes ?? 0} 次` : '开始看后自动起',
+            lp && !lp.stopped ? 'ok' : '')),
+        h('div', { className: 'snv-actions' },
+          h(SnButton, { kind: 'primary', onClick: () => act('start'), disabled: Boolean(busy) }, '开始陪看'),
+          h(SnButton, { onClick: () => act('stop'), disabled: Boolean(busy) }, '结束本次'),
+          h(SnButton, { onClick: () => act('window-open'), disabled: Boolean(busy) }, '叫回悬浮窗')),
+        h('div', { className: 'snv-section' },
+          h('h3', null, '会话时间线'),
+          h(SnEventTable, { events: sessions, empty: '还没有开始/结束记录。' })));
+    }
+
+    function SnRecords({ life }) {
+      const events = life?.journal?.events ?? [];
+      return h(Fragment, null,
+        h('p', { className: 'snv-note' },
+          '这里只记动作元数据：什么时候开始/停止、开没开窗、成功没有。不保存画面、帧或窗口标题；画面只走模型，生命周期记录留在本机。'),
+        h('div', { className: 'snv-section' },
+          h('h3', null, `全部动作（${events.length}）`),
+          h(SnEventTable, { events, empty: '还没有记录。' })),
+        h('div', { className: 'snv-section' },
+          h('h3', null, '记录文件'),
+          h('div', { className: 'snv-path' }, life?.journal?.path ?? life?.path ?? '—')));
+    }
+
+    function SnDebug({ status, life, act, busy, refresh }) {
+      const cap = life?.status?.capture ?? {};
+      const win = life?.status?.window ?? {};
+      const lp = life?.status?.loop ?? null;
+      const listen = cap.listen ?? {};
+      const lastError = cap.lastError ?? win.reason ?? lp?.reason ?? '';
+      const lastErrorText = typeof lastError === 'string' ? lastError : (lastError ? JSON.stringify(lastError) : '');
+      const source = typeof cap.source === 'string'
+        ? cap.source
+        : (cap.source?.kind ?? cap.source?.type ?? '—');
+      const tick = cap.running ? cap.since : cap.idleSec;
+      const stats = cap.stats ?? {};
+      const takes = cap.takes ?? {};
+      const reserved = cap.reserved ?? null;
+      const verdict = snVerdict(cap);
+      const avgScore = Number(stats.scoreN) > 0 ? Math.round(Number(stats.scoreSum) / Number(stats.scoreN)) : null;
+      const tiers = Object.entries(stats.tierHist ?? {}).map(([tier, n]) => `${tier}×${n}`).join(' ') || '—';
+      const pairs = [
+        ['采集', cap.running ? '在跑' : '停'],
+        ['源', source],
+        ['画质', cap.quality ?? '—'],
+        ['帧 / 出图', `${cap.frames ?? 0} 帧 / ${cap.sheets ?? stats.sheets ?? 0} 张`],
+        ['留下的帧', stats.kept ?? 0],
+        ['判据 切/标/底', `${stats.cuts ?? 0} / ${stats.marks ?? 0} / ${stats.floors ?? 0}`],
+        ['重复跳过', stats.dupSkipped ?? 0],
+        ['分数 均/最高', avgScore === null ? '—' : `${avgScore} / ${stats.scoreMax ?? '—'}`],
+        ['档位分布', tiers],
+        ['首帧至今', cap.secondsSinceWake == null ? '—' : snSpan(cap.secondsSinceWake)],
+        ['叫醒空手', `${takes.peekEmpty ?? 0} / ${takes.peek ?? 0}`],
+        ['预留图', reserved ? `seq ${reserved.seq} · ${reserved.ageSec}s` : '—'],
+        ['队列', cap.pending ?? 0],
+        ['溢出', stats.overflow ?? 0],
+        [cap.running ? '已运行' : '已停', snSpan(tick)],
+        ['唤醒 / 会话', `${lp?.wakes ?? 0} 次 / ${lp?.session ?? '—'}`],
+        ['窗口', win.alive ? `pid ${win.pid ?? '?'}` : (win.pid ? `已退出（${win.pid}）` : '没开')],
+        ['心跳', win.heartbeatAgeSec == null ? '—' : `${win.heartbeatAgeSec} 秒前`],
+        ['听声音', listen.enabled ? '在听' : (listen.reason ? String(listen.reason) : '没在听')],
+      ];
+      return h(Fragment, null,
+        h('p', { className: 'snv-note' },
+          '调试页每 1.5 秒自动刷新；点「开始看」会自动切到这里。显示的是宿主真实状态，只读，不会改配置。'),
+        h('div', { className: 'snv-row' },
+          h(SnButton, {
+            kind: cap.running ? 'quiet' : 'primary',
+            onClick: () => act('start'),
+            disabled: Boolean(busy),
+          }, cap.running ? '重新开始' : '开始看'),
+          h(SnButton, { kind: 'quiet', onClick: () => act('stop'), disabled: !cap.running || Boolean(busy) }, '停止'),
+          h(SnButton, { kind: 'quiet', onClick: refresh }, '刷新')),
+        lastErrorText ? h('div', { className: 'snv-error' }, `最近错误：${lastErrorText}`) : null,
+        h('div', { className: 'snv-section' },
+          h('h3', null, '实时状态'),
+          h('div', { className: 'snv-row' },
+            h(SnChip, { tone: verdict.tone }, verdict.text)),
+          h('div', { className: 'snv-debug-grid' }, pairs.map(([key, value]) => h('div', { className: 'snv-kv', key },
+            h('div', { className: 'snv-kv-k' }, key),
+            h('div', { className: 'snv-kv-v' }, String(value)))))),
+        h('div', { className: 'snv-section' },
+          h('h3', null, '最近动作'),
+          h(SnEventTable, { events: (life?.journal?.events ?? []).slice(0, 6), empty: '还没有动作。' })),
+        h('div', { className: 'snv-section' },
+          h('h3', null, '原始状态'),
+          h('details', { className: 'snv-details' },
+            h('summary', null, '展开 runner.status() / loop / window'),
+            h('pre', { className: 'snv-pre' }, JSON.stringify({
+              capture: cap,
+              loop: lp,
+              window: win,
+              tuning: status?.values ?? null,
+            }, null, 2)))));
+    }
+
+    function SnPrivacy({ status, life, act, busy }) {
+      const win = life?.status?.window ?? {};
+      const confirmAct = (action, message) => {
+        if (typeof window !== 'undefined' && typeof window.confirm === 'function' && !window.confirm(message)) return;
+        void act(action);
+      };
+      return h(Fragment, null,
+        h('p', { className: 'snv-note' },
+          '隐私边界：抓到的画面只作为模型输入；本插件不落盘画面。生命周期记录也只是动作，不含屏上内容。随时可以一键停掉采集和悬浮窗。'),
+        h('div', { className: 'snv-actions' },
+          h(SnButton, { kind: 'danger', onClick: () => confirmAct('stop', '停止采集和陪看循环？'), disabled: Boolean(busy) }, '停止采集与陪看'),
+          h(SnButton, { kind: 'danger', onClick: () => confirmAct('window-close', '关闭桌面悬浮窗？'), disabled: Boolean(busy) }, '关闭悬浮窗'),
+          h(SnButton, { onClick: () => confirmAct('clear', '清空生命周期记录？只删动作日志，不碰配置。'), disabled: Boolean(busy) }, '清空动作记录')),
+        h('div', { className: 'snv-section' },
+          h('h3', null, '当前状态'),
+          h('div', { className: 'snv-row' },
+            h(SnChip, { tone: life?.status?.capture?.running ? 'ok' : '' }, life?.status?.capture?.running ? '采集在跑' : '采集停了'),
+            h(SnChip, { tone: win.alive ? 'ok' : '' }, win.alive ? '悬浮窗在' : '悬浮窗不在'),
+            h(SnChip, null, '画面不落盘'))),
+        h('div', { className: 'snv-section' },
+          h('h3', null, '文件位置'),
+          h('div', { className: 'snv-path' }, `配置：${status?.path ?? '—'}`),
+          h('div', { className: 'snv-path' }, `生命周期：${life?.journal?.path ?? life?.path ?? '—'}`),
+          h('div', { className: 'snv-path' }, '悬浮窗日志：~/.dsh/see-now-window.log')));
+    }
+
+    function SnSettings() {
+      return h('div', { className: 'snv-embed' }, h(SettingsPage));
+    }
+
+    function SeeNowPanel() {
+      const [tab, setTab] = useState('overview');
+      const [status, setStatus] = useState(null);
+      const [life, setLife] = useState(null);
+      const [error, setError] = useState('');
+      const [toast, setToast] = useState('');
+      const [busy, setBusy] = useState('');
+
+      const refresh = useCallback(async () => {
+        try {
+          const [nextStatus, nextLife] = await Promise.all([snRequest('/status'), snRequest('/lifecycle')]);
+          setStatus(nextStatus);
+          setLife(nextLife);
+          setError('');
+        } catch (failure) {
+          setError(failure.message);
+        }
+      }, []);
+
+      useEffect(() => { void refresh(); }, [refresh]);
+
+      // 提示条自己下台：动作已经完成，留着只会盖住下一次的状态。
+      useEffect(() => {
+        if (!toast) return undefined;
+        const timer = setTimeout(() => setToast(''), 4000);
+        return () => clearTimeout(timer);
+      }, [toast]);
+
+      const capRunning = Boolean(life?.status?.capture?.running);
+      useEffect(() => {
+        if (tab !== 'debug' && !capRunning) return undefined;
+        const timer = setInterval(() => {
+          // 窗口在后台时没人看这页，别再按 1.5 秒去敲宿主。
+          if (typeof document !== 'undefined' && document.hidden) return;
+          void refresh();
+        }, 1500);
+        return () => clearInterval(timer);
+      }, [tab, capRunning, refresh]);
+
+      const act = useCallback(async (action) => {
+        setBusy(action);
+        setError('');
+        setToast('');
+        try {
+          const next = await snRequest('/lifecycle', {
+            method: 'POST',
+            body: JSON.stringify({ action }),
+          });
+          // 回包已经是完整的一份（status + journal），不用再 GET 两趟。
+          setLife(next);
+          if (action === 'start' && next?.ok !== false) setTab('debug');
+          setToast(`${SN_ACTION[action] ?? action}：完成`);
+        } catch (failure) {
+          setError(failure.message);
+        } finally {
+          setBusy('');
+        }
+      }, []);
+
+      const cap = life?.status?.capture ?? {};
+      const win = life?.status?.window ?? {};
+      const lp = life?.status?.loop ?? null;
+      const dots = [
+        h('span', { key: 'cap', className: `snv-dot ${cap.running ? 'ok' : ''}` }, cap.running ? '正在看' : '没在看'),
+        h('span', { key: 'win', className: `snv-dot ${win.alive ? 'ok' : ''}` }, win.alive ? '悬浮窗开着' : '悬浮窗没开'),
+        h('span', { key: 'loop', className: `snv-dot ${lp && !lp.stopped ? 'ok' : ''}` }, lp ? (lp.stopped ? '循环已停' : '陪看循环在跑') : '无循环'),
+      ];
+      let content = null;
+      if (tab === 'overview') content = h(SnOverview, { status, life, act, busy, refresh });
+      else if (tab === 'sessions') content = h(SnSessions, { life, act, busy });
+      else if (tab === 'records') content = h(SnRecords, { life });
+      else if (tab === 'debug') content = h(SnDebug, { status, life, act, busy, refresh });
+      else if (tab === 'settings') content = h(SnSettings);
+      else content = h(SnPrivacy, { status, life, act, busy });
+
+      return h('main', { className: 'snv' },
+        h('style', null, SN_CSS),
+        h('header', { className: 'snv-head' },
+          h('div', null,
+            h('p', { className: 'snv-kicker' }, 'VIVY · 感知'),
+            h('h1', null, '我看到了'),
+            h('p', { className: 'snv-sub' }, '看屏幕、听声音、管住陪看的开始与结束。配置和记录都在这一页。')),
+          h('div', { className: 'snv-dots' }, ...dots)),
+        h('div', { className: 'snv-tabs', role: 'tablist', 'aria-label': '我看到了导航' },
+          SN_TABS.map(([id, label]) => h('button', {
+            key: id,
+            type: 'button',
+            role: 'tab',
+            id: `snv-tab-${id}`,
+            'aria-controls': `snv-panel-${id}`,
+            'aria-selected': tab === id,
+            className: tab === id ? 'snv-tab on' : 'snv-tab',
+            onClick: () => setTab(id),
+          }, label))),
+        h('div', {
+          className: 'snv-body',
+          role: 'tabpanel',
+          id: `snv-panel-${tab}`,
+          'aria-labelledby': `snv-tab-${tab}`,
+        },
+          error ? h('div', { className: 'snv-alert', role: 'alert' },
+            h('span', null, error),
+            h(SnButton, { kind: 'quiet', onClick: refresh }, '重试')) : null,
+          toast ? h('div', { className: 'snv-toast' }, toast) : null,
+          content));
+    }
+
     // ── 接进 shell ────────────────────────────────────────────────────────────
     function apply(ctx) {
       ctx.effect(() => {
@@ -882,19 +1337,26 @@ window.__ModuleLoader__.load({
         return () => style.remove();
       }, 'dsh-see-now: styles');
 
-      ctx.slots.inject('settings.section', () => ctx.slots.register({
-        name: 'settings.section',
+      /* VIVY心核：整页管理面板，不再占用 DSH 设置里的独立分区。
+         `dsh-vivy-studio` 按可访问名把它归到「心核」，order 16 接在「进化」之后。 */
+      ctx.slots.inject('main', () => ctx.slots.register({
+        name: 'main',
+        key: 'see-now',
+        inject: () => ({}),
+      }, SeeNowPanel));
+
+      ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
+        name: 'sidebar.panellist',
         id: 'see-now',
-        order: 43,
-        label: () => t('nav'),
-        locale: NS,
-      }, () => h(SettingsPage)));
+        order: 16,
+        label: () => '我看到了',
+      }, EyeIcon));
     }
 
     exports.apply = apply;
     exports.inject = inject;
     exports.name = 'dsh-see-now';
-    exports.__test = { draftOf, mergeValues, patchOf, num, TEXT, localDraftOf, localPatchOf, shouldShowLocal };
+    exports.__test = { draftOf, mergeValues, patchOf, num, TEXT, localDraftOf, localPatchOf, shouldShowLocal, SN_TABS, snVerdict };
     return module.exports;
   },
 });

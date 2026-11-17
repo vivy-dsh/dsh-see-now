@@ -540,13 +540,13 @@ export async function apply(ctx) {
  *
  * 这里整段包在 try 里：面板是附加能力，挂不上只该少一页设置，不该影响看屏幕。
  */
-function installSettings(ctx, log) {
+function installSettings(ctx, log, lifecycle) {
   try {
     if (typeof ctx?.inject !== 'function') {
       log('宿主没有 ctx.inject，跳过设置页接口');
       return;
     }
-    const handle = createSettingsApi({ logger: ctx?.logger });
+    const handle = createSettingsApi({ logger: ctx?.logger, lifecycle });
     ctx.inject(['webServer'], (scoped) => {
       scoped.effect(
         () =>
@@ -604,7 +604,47 @@ async function registerAll(ctx) {
   const tuning = readTuning();
   if (tuning.warnings.length) log?.(`[see-now] ${tuning.warnings.join('；')}`);
 
-  installSettings(ctx, log);
+  /**
+   * 面板的生命周期动作。`runner` / `loop` / `ensureLoop` 都在下面才声明 ——
+   * 这里只交出闭包，路由第一次被调用时它们已经初始化完毕。
+   */
+  const lifecycle = {
+    status: () => ({
+      capture: runner.status(),
+      window: windowReport(),
+      loop: loop?.state() ?? null,
+    }),
+    start: async () => {
+      try {
+        const built = srcOf({});
+        if (built.error) return { ok: false, reason: built.error };
+        const started = await runner.start({ src: built.src ?? { kind: 'screen' } });
+        if (started?.error) return { ok: false, reason: started.error };
+        ensureLoop(null);
+        return { ok: true, note: built.src?.kind ?? 'screen' };
+      } catch (err) {
+        return { ok: false, reason: String(err?.message ?? err) };
+      }
+    },
+    stop: async () => {
+      try { runner.stop(); } catch { /* 已经停了 */ }
+      try { stopLoop('用户从面板停止'); } catch { /* 没起循环 */ }
+      return { ok: true };
+    },
+    open: async () => {
+      try {
+        const r = await openWindow({ log });
+        return { ok: r?.ok !== false, reason: r?.reason, note: r?.already ? 'already' : 'opened' };
+      } catch (err) {
+        return { ok: false, reason: String(err?.message ?? err) };
+      }
+    },
+    close: async () => {
+      try { closeWindow(); return { ok: true }; } catch (err) { return { ok: false, reason: String(err?.message ?? err) }; }
+    },
+  };
+
+  installSettings(ctx, log, lifecycle);
   const runner = createRunner({
     ffmpegPath: ffmpeg.path,
     log,

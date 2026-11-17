@@ -1,5 +1,5 @@
 /**
- * 设置页背后的三条路由，全在 `/api/see-now/` 下。
+ * 「我看到了」背后的四条路由，全在 `/api/see-now/` 下。
  *
  * | 方法 | 路径 | 作用 |
  * |---|---|---|
@@ -7,6 +7,7 @@
  * | POST | `/config` | 提交要改的键；校验通过才落盘（`see-now.json`） |
  * | POST | `/local`  | 改转写服务的地址与凭据（`asr.json`） |
  * | GET/POST | `/window` | 看/改悬浮窗外观（`watch-window.json` 的 `glass`） |
+ * | GET/POST | `/lifecycle` | 「我看到了」的生命周期：状态 + 动作流水；POST start/stop/window/clear |
  *
  * ## 为什么这么几条
  *
@@ -24,7 +25,8 @@
 
 import { rejectionFor } from './settings-trust.js';
 import { asrPath, readAsrConfig, writeAsrConfig } from './asr-store.mjs';
-import { readWindowStyle, setWindowStyle, setWindowHidden, setWindowDanmaku } from './window.js';
+import { readWindowStyle, setWindowStyle, setWindowHidden, setWindowDanmaku, openWindow, closeWindow, windowReport } from './window.js';
+import { appendLifecycle, clearLifecycle, lifecyclePath, readLifecycle } from './lifecycle-store.mjs';
 import {
   readTuning,
   writeTuning,
@@ -77,7 +79,16 @@ function valuesOf(tuning) {
   return values;
 }
 
-export function createSettingsApi({ logger } = {}) {
+/** 生命周期状态永远不该把路由打崩；失败就回一个能显示的错误对象。 */
+function safeStatus(lifecycle) {
+  try {
+    return lifecycle?.status?.() ?? null;
+  } catch (err) {
+    return { error: String(err?.message ?? err) };
+  }
+}
+
+export function createSettingsApi({ logger, lifecycle } = {}) {
   function log(line) {
     try {
       logger?.info?.(line);
@@ -253,6 +264,60 @@ export function createSettingsApi({ logger } = {}) {
           ok,
           window: readWindowStyle(),
           rejected,
+        });
+        return;
+      }
+
+      if (route === '/lifecycle') {
+        if (!lifecycle) {
+          send(res, 503, { ok: false, rejected: ['生命周期接口没有接线'] });
+          return;
+        }
+        if (method === 'GET' || method === 'HEAD') {
+          send(res, 200, {
+            ok: true,
+            status: safeStatus(lifecycle),
+            journal: readLifecycle({ limit: 80 }),
+            path: lifecyclePath(),
+          });
+          return;
+        }
+        if (method !== 'POST') {
+          send(res, 405, { ok: false, rejected: ['只支持 GET / POST'] });
+          return;
+        }
+
+        let body;
+        try {
+          body = await readJson(req);
+        } catch (err) {
+          send(res, 400, { ok: false, rejected: [`请求体不是合法 JSON：${err?.message ?? err}`] });
+          return;
+        }
+        const action = String(body?.action ?? '').trim().toLowerCase();
+        if (!['start', 'stop', 'window-open', 'window-close', 'clear'].includes(action)) {
+          send(res, 400, { ok: false, rejected: [`没有这个动作：${action || '(空)'}`] });
+          return;
+        }
+
+        let result = { ok: true };
+        if (action === 'start') result = (await lifecycle.start?.()) ?? { ok: false, reason: '启动接口没有接线' };
+        else if (action === 'stop') result = (await lifecycle.stop?.()) ?? { ok: false, reason: '停止接口没有接线' };
+        else if (action === 'window-open') result = (await lifecycle.open?.()) ?? { ok: false, reason: '开窗接口没有接线' };
+        else if (action === 'window-close') result = (await lifecycle.close?.()) ?? { ok: false, reason: '关窗接口没有接线' };
+        else if (action === 'clear') clearLifecycle();
+
+        const ok = result?.ok !== false;
+        appendLifecycle({ action, ok, note: result?.reason ?? result?.note ?? null });
+        log(`see-now: 生命周期 ${action} ${ok ? 'ok' : 'failed'}`);
+        send(res, 200, {
+          ok,
+          action,
+          result,
+          rejected: ok ? [] : [result?.reason ?? '动作失败'],
+          status: safeStatus(lifecycle),
+          journal: readLifecycle({ limit: 80 }),
+          path: lifecyclePath(),
         });
         return;
       }

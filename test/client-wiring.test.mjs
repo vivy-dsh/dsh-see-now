@@ -97,16 +97,21 @@ function runApply() {
   return { effects, registered, injected };
 }
 
-test('注册进 settings.section，id 与 order 固定', () => {
+test('注册 main 与侧栏「我看到了」；不再占用设置分区', () => {
   const { registered, injected } = runApply();
-  assert.deepEqual(injected, ['settings.section']);
-  assert.equal(registered.length, 1);
-  const { def } = registered[0];
-  assert.equal(def.name, 'settings.section');
-  assert.equal(def.id, 'see-now');
-  assert.equal(def.order, 43);
-  assert.equal(def.locale, 'settings.seeNow');
-  assert.equal(def.label(), '看你看的东西');
+  assert.deepEqual(injected, ['main', 'sidebar.panellist']);
+  assert.equal(registered.length, 2);
+  assert.equal(registered.some((entry) => entry.def.name === 'settings.section'), false);
+
+  const sidebar = registered.find((entry) => entry.def.name === 'sidebar.panellist');
+  assert.ok(sidebar, 'sidebar.panellist is missing');
+  assert.equal(sidebar.def.id, 'see-now');
+  assert.equal(sidebar.def.order, 16);
+  assert.equal(sidebar.def.label(), '我看到了');
+
+  const main = registered.find((entry) => entry.def.name === 'main');
+  assert.ok(main, 'main is missing');
+  assert.equal(main.def.key, 'see-now');
 });
 
 test('样式表挂上了，并且带一个能摘掉的清理函数', () => {
@@ -117,14 +122,44 @@ test('样式表挂上了，并且带一个能摘掉的清理函数', () => {
   assert.equal(typeof styleNodes[0].remove, 'function');
 });
 
-test('第一帧（还在读）也能渲染出一个元素，不会抛', () => {
+test('面板第一帧能渲染出外壳，不会抛', () => {
   const { registered } = runApply();
-  // 槽位拿到的是 `() => h(SettingsPage)`：外面这层是组件引用，真渲染要再调一次
-  const outer = registered[0].render();
-  assert.equal(typeof outer.type, 'function');
-  const element = outer.type(outer.props);
-  assert.equal(element.type, 'div');
-  assert.equal(element.props.className, 'sn_root');
+  const main = registered.find((entry) => entry.def.name === 'main');
+  assert.ok(main, 'main is missing');
+  const element = main.render();
+  assert.equal(element.type, 'main');
+  assert.equal(element.props.className, 'snv');
+});
+
+test('调试页在导航里，并且保留原五页', () => {
+  assert.deepEqual(mod.__test.SN_TABS.map(([id]) => id), ['overview', 'sessions', 'records', 'debug', 'settings', 'privacy']);
+});
+
+// 调试页最常被问的一句是「帧在涨，为什么出图是 0」。判据只能是已有的计数，
+// 不新增服务端字段，所以这四条要能各说各话。
+test('snVerdict 把「0 张」分成四种成因', () => {
+  const { snVerdict } = mod.__test;
+
+  // 没在跑
+  assert.equal(snVerdict({ running: false }).tone, '');
+  assert.match(snVerdict({ running: false }).text, /没在采集/);
+
+  // 一帧都没抓到 → 要人去看最近错误
+  const noFrames = snVerdict({ running: true, frames: 0, stats: { kept: 0, sheets: 0 } });
+  assert.equal(noFrames.tone, 'warn');
+  assert.match(noFrames.text, /一帧都没抓到/);
+
+  // 抓到了但一帧没留 → 画面没变化，这是正常现象，别当故障
+  const noKept = snVerdict({ running: true, frames: 156, stats: { kept: 0, sheets: 0 } });
+  assert.equal(noKept.tone, 'warn');
+  assert.match(noKept.text, /156 帧/);
+  assert.match(noKept.text, /画面没变化/);
+
+  // 留了帧还没封箱 / 已经出图
+  assert.match(snVerdict({ running: true, frames: 20, stats: { kept: 3, sheets: 0 } }).text, /还没封箱/);
+  const done = snVerdict({ running: true, frames: 20, stats: { kept: 9, sheets: 2 } });
+  assert.equal(done.tone, 'ok');
+  assert.match(done.text, /2 张图/);
 });
 
 // ── 补丁构造（纯函数部分）─────────────────────────────────────────────────────
